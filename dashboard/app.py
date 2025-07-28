@@ -1,8 +1,12 @@
-# Imports
-faicons
-pandas
-plotly
-shinywidgets
+# Imports- PyShiny Express version
+from faicons import icon_svg
+import pandas as pd
+import plotly.express as px
+from shinywidgets import render_plotly
+from shiny import reactive, render
+from shiny express import ui
+
+
 
 # Reactive Aspects @reactive.calc to filter data by day, then compute the average tip 
 @reactive.calc
@@ -27,7 +31,6 @@ app = App(ui, server=None)
 ui.input_select("selected_day", "Choose a day:", choices=sorted(df["day"].unique()))
 
 UI Sidebar Components
-from shiny.express import ui
 
 app_ui = ui.page_sidebar(
     ui.sidebar_panel(
