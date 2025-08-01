@@ -1,87 +1,163 @@
-# Imports- PyShiny Express version
-from faicons import icon_svg
+# --------------------------------------------
+# Imports - ShinyLive version (shiny.express)
+# --------------------------------------------
+
 import pandas as pd
 import plotly.express as px
-from shinywidgets import render_plotly
+import faicons as fa
+
 from shiny import reactive, render
-from shiny express import ui
+from shiny.express import ui, input
+from shinywidgets import render_plotly
+from faicons import icon_svg
 
+# --------------------------------------------
+# Load Data
+# --------------------------------------------
 
-
-# Reactive Aspects @reactive.calc to filter data by day, then compute the average tip 
-@reactive.calc
-def filtered_data():
-    selected = input.selected_day()
-    return df[df["day"] == selected]
-
-# Reactive calculation: calculate average tip
-@reactive.calc
-def avg_tip():
-    data = filtered_data()
-    return data["tip"].mean()
-
-# Render output
-@render.text
-def avg_tip_text():
-    return f"Average tip on {input.selected_day()}: ${avg_tip():.2f}"
-
-app = App(ui, server=None) 
-
-# UI Page Inputs
-ui.input_select("selected_day", "Choose a day:", choices=sorted(df["day"].unique()))
-
-UI Sidebar Components
-
-app_ui = ui.page_sidebar(
-    ui.sidebar_panel(
-        ui.input_select("selected_day", "Choose a day:", choices=sorted(df["day"].unique())),
-        # You can add more inputs here, e.g.:
-        # ui.input_checkbox("smoker_only", "Show only smokers"),
-    ),
-    ui.main_panel(
-        ui.output_text_verbatim("avg_tip_text")
-    )
+tips = pd.read_csv(
+    "https://raw.githubusercontent.com/bfuemmeler/cintel-06-custom/main/dashboard/tips.csv"
 )
-Choose at least one input that the user can interact with to filter the data set
-ui.input_checkbox_group(
-    "selected_sex",  # input id
-    "Select sex:",   # label shown to user
-    choices=["Male", "Female"],
-    selected=["Male", "Female"],  # default to both selected
-)
+
+bill_rng = (min(tips["total_bill"]), max(tips["total_bill"]))
+
+# --------------------------------------------
+# Reactive filtered data
+# --------------------------------------------
 
 @reactive.calc
 def filtered_data():
-    selected_day = input.selected_day()
-    selected_sex = input.selected_sex()
-    filtered = df[
-        (df["day"] == selected_day) &
-        (df["sex"].isin(selected_sex))
-    ]
-    return filtered
-  
-# UI Main Content
-Everything not in the sidebar is the main content.
-Will you use a template?  Most likely
-Will you use layout columns?  Possibly 
-Will you use navigation or accordion components?  I would like to try this: ui.navset_pill() — Pill-style navigation (like tabs but rounded)
-Define some output text. Will it be in a card? A value box?   A value box 
-Define an output table or grid to show your filtered data set: ui.output_table("filtered_table")
-@render.table
-def filtered_table():
-    # Return the filtered data as a pandas DataFrame
-    return filtered_data()
-Define an  output widget or chart (e.g., a Plotly Express chart) to show the filtered data graphically
-ui.output_plot("scatter_plot")
-@render.plot
-def scatter_plot():
-    df_filtered = filtered_data()  # your reactive filtered DataFrame
-    fig = px.scatter(
-        df_filtered,
-        x="total_bill",
-        y="tip",
-        color="sex",  # color points by sex
-        title="Total Bill vs Tip",
-        labels={"total_bill": "Total Bill ($)", "tip": "Tip ($)"}
+    bill = input.total_bill()
+    gender = input.gender()
+    times = input.selected_time()
+
+    df = tips[
+        tips["total_bill"].between(bill[0], bill[1])
+        & tips["sex"].isin(gender)
+        & tips["time"].isin(times)
+    ].copy()
+    df["tip_pct"] = df["tip"] / df["total_bill"]
+    return df
+
+# --------------------------------------------
+# Define Icons
+# --------------------------------------------
+
+ICONS = {
+    "users": fa.icon_svg("users", "solid"),
+    "pen": fa.icon_svg("pen", "solid"),
+    "receipt": fa.icon_svg("receipt", "solid"),
+}
+
+# --------------------------------------------
+# UI Page Setup
+# --------------------------------------------
+
+ui.page_opts(title="Tips Dashboard", fillable=True)
+
+with ui.sidebar():
+    ui.input_slider(
+        "total_bill", 
+        "Total Bill:", 
+        min=bill_rng[0],
+        max=bill_rng[1],
+        value=bill_rng,
+        pre="$",
     )
-    return fig
+
+    ui.input_checkbox_group(
+        "gender",
+        "Select Gender:",
+        choices={
+            "Male": ui.span("Male", style="color:red;"),
+            "Female": ui.span("Female", style="color:green;"),
+        },
+        selected=["Male", "Female"],
+    )
+
+    ui.input_checkbox_group(
+        "selected_time",
+        "Choose Time of Service:",
+        choices=["Lunch", "Dinner"],
+        selected=["Lunch", "Dinner"],
+        inline=True,
+    )
+
+# --------------------------------------------
+# Value Boxes
+# --------------------------------------------
+    @render.text
+    def guests_count_box():
+        return str(filtered_data().shape[0])
+
+    @render.text
+    def avg_tip_pct_box():
+        df = filtered_data()
+        return "N/A" if df.empty else f"{(df['tip_pct'].mean() * 100):.1f}%"
+
+    @render.text
+    def avg_bill_box():
+        df = filtered_data()
+        return "N/A" if df.empty else f"${df['total_bill'].mean():.2f}"
+
+with ui.layout_columns():
+    ui.value_box(
+        title="Guests in View",
+        value=guests_count_box,
+        showcase=ICONS["users"],
+        theme="bg-gradient-blue-yellow",
+    )
+    ui.value_box(
+        title="Avg Tip %",
+        value=avg_tip_pct_box,
+        showcase=ICONS["pen"],
+        theme="bg-gradient-blue-yellow",
+    )
+    ui.value_box(
+        title="Avg Bill",
+        value=avg_bill_box,
+        showcase=ICONS["receipt"],
+        theme="bg-gradient-blue-yellow",
+    )
+
+# --------------------------------------------
+# Charts & Table
+# --------------------------------------------
+
+with ui.layout_columns():
+    with ui.card(full_screen=True):
+        ui.card_header("Tips Table")
+
+        @render.data_frame
+        def show_data():
+            return render.DataGrid(filtered_data())
+
+    with ui.card(full_screen=True):
+        ui.card_header("Average Tip by Gender")
+
+        @render_plotly
+        def plot_tips_by_gender():
+            df = filtered_data()
+            if df.empty:
+                return px.bar(title="No Data")
+            summary = df.groupby("sex")["tip"].mean().reset_index()
+            return px.bar(summary, x="sex", y="tip", color="sex", title="Avg Tip by Gender")
+
+    with ui.card(full_screen=True):
+        ui.card_header("Tips by Day")
+
+        @render_plotly
+        def day_plot():
+            df = filtered_data()
+            if df.empty:
+                return px.bar(title="No data")
+            summary = df.groupby("day")["tip"].sum().reset_index()
+            return px.bar(
+                summary,
+                x="day",
+                y="tip",
+                color="day",
+                title="Total Tips by Day",
+                labels={"tip": "Total Tips ($)", "day": "Day"},
+                category_orders={"day": ["Thur", "Fri", "Sat", "Sun"]},
+            )
