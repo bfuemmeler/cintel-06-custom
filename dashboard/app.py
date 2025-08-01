@@ -7,7 +7,7 @@ import plotly.express as px
 import faicons as fa
 
 from shiny import reactive, render
-from shiny.express import ui, input
+from shiny.express import ui, input, output
 from shinywidgets import render_plotly
 from faicons import icon_svg
 
@@ -85,41 +85,41 @@ with ui.sidebar():
 
 # --------------------------------------------
 # Value Boxes
-# --------------------------------------------
-    @render.text
-    def guests_count_box():
-        return str(filtered_data().shape[0])
-
-    @render.text
-    def avg_tip_pct_box():
-        df = filtered_data()
-        return "N/A" if df.empty else f"{(df['tip_pct'].mean() * 100):.1f}%"
-
-    @render.text
-    def avg_bill_box():
-        df = filtered_data()
-        return "N/A" if df.empty else f"${df['total_bill'].mean():.2f}"
-
+# --------------------------------------------  
 with ui.layout_columns():
+    @render.text
+    def guests_count():
+        return str(filtered_data().shape[0])
+    
     ui.value_box(
         title="Guests in View",
-        value=guests_count_box,
+        value=guests_count,
         showcase=ICONS["users"],
         theme="bg-gradient-blue-yellow",
     )
+    @render.text
+    def avg_tip_pct():
+        df = filtered_data()
+        return "N/A" if df.empty else f"{(df['tip_pct'].mean() * 100):.1f}%"
+        
     ui.value_box(
         title="Avg Tip %",
-        value=avg_tip_pct_box,
+        value=avg_tip_pct,
         showcase=ICONS["pen"],
         theme="bg-gradient-blue-yellow",
     )
+    @render.text
+    def avg_bill():
+        df = filtered_data()
+        return "N/A" if df.empty else f"${df['total_bill'].mean():.2f}"
+        
     ui.value_box(
         title="Avg Bill",
-        value=avg_bill_box,
+        value=avg_bill,
         showcase=ICONS["receipt"],
         theme="bg-gradient-blue-yellow",
     )
-
+    
 # --------------------------------------------
 # Charts & Table
 # --------------------------------------------
